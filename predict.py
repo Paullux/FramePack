@@ -11,7 +11,7 @@ from transformers import (
     SiglipImageProcessor, SiglipVisionModel,
     LlamaModel, LlamaTokenizerFast
 )
-from diffusers import AutoencoderKL
+from diffusers import AutoencoderKLHunyuanVideo
 from diffusers_helper.models.hunyuan_video_packed import HunyuanVideoTransformer3DModelPacked
 from diffusers_helper.hunyuan import encode_prompt_conds, vae_decode_fake
 from diffusers_helper.utils import generate_timestamp, resize_and_center_crop, save_bcthw_as_mp4, crop_or_pad_yield_mask
@@ -21,6 +21,7 @@ from diffusers_helper.pipelines.k_diffusion_hunyuan import sample_hunyuan
 class Predictor(BasePredictor):
     def setup(self):
         print("🔧 Chargement des modèles...")
+        self.vae = AutoencoderKLHunyuanVideo.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="vae", torch_dtype=torch.float16).to("cuda")
         self.text_encoder = LlamaModel.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="text_encoder", torch_dtype=torch.float16).to("cuda")
         self.text_encoder_2 = CLIPTextModel.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="text_encoder_2", torch_dtype=torch.float16).to("cuda")
         self.tokenizer = LlamaTokenizerFast.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="tokenizer")
@@ -43,7 +44,7 @@ class Predictor(BasePredictor):
         fps: int = Input(description="Framerate de la vidéo", default=30),
     ) -> Path:
         print("🚀 Génération en cours...")
-        torch.manual_seed(seed)
+        generator = torch.Generator(device="cuda").manual_seed(seed)
 
         # Préparation image
         img = Image.open(image).convert("RGB")
@@ -82,7 +83,7 @@ class Predictor(BasePredictor):
             distilled_guidance_scale=10.0,
             guidance_rescale=0.0,
             num_inference_steps=steps,
-            generator=torch.manual_seed(seed),
+            generator = generator,
             prompt_embeds=prompt_embeds,
             prompt_embeds_mask=prompt_mask,
             prompt_poolers=prompt_poolers,
