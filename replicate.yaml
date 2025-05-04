@@ -1,22 +1,30 @@
 name: framepack-runner
-description: "Video generation with FramePack (by Stanford). Input = image + motion prompt."
+description: "🎞️ Generate videos from image + motion prompt using Stanford's FramePack model (2025)."
 runtime: python
 python_version: "3.10"
+
+# Commande exécutée côté serveur Replicate
 command: python framepack_runner.py --input ${image} --prompt "${prompt}" --frames ${frames} --fps ${fps}
+
 input:
   - name: image
     type: file
-    description: "Image d'entrée (.png ou .jpg)"
+    description: "Input image file (.png or .jpg)"
   - name: prompt
     type: string
+    description: "Motion prompt describing the subject's movement or camera action"
     default: "The man dances powerfully, full of energy."
   - name: frames
     type: integer
+    description: "Number of frames to generate"
     default: 60
   - name: fps
     type: integer
+    description: "Output video framerate (frames per second)"
     default: 24
+
 output:
   type: file
   path: out.mp4
+
 
