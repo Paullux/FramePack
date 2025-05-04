@@ -9,8 +9,8 @@ build:
   python_requirements: requirements.txt
   run:
     - pip install --no-cache-dir torch==2.1.2+cu118 torchvision==0.16.2+cu118 torchaudio==2.1.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-    - wget https://github.com/Dao-AILab/flash-attention/releases/download/v2.3.6/flash_attn-2.3.6%2Bcu118torch2.1.2_cxx11abiTRUE-cp310-cp310-linux_x86_64.whl
-    - pip install flash_attn-2.3.6+cu118torch2.1.2_cxx11abiTRUE-cp310-cp310-linux_x86_64.whl
+    - wget "https://github.com/Dao-AILab/flash-attention/releases/download/v2.3.6/flash_attn-2.3.6%2Bcu118torch2.1_cxx11abiTRUE-cp310-cp310-linux_x86_64.whl" -O /tmp/flash_attn.whl
+    - pip install /tmp/flash_attn.whl
     - pip install --no-cache-dir -r requirements.txt
 
 predict: predict.py:Predictor
