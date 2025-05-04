@@ -1,41 +1,104 @@
-from cog import BasePredictor, Input, Path
-from diffusers import FramePackPipeline
+from cog import BasePredictor, Path, Input
 from PIL import Image
 import torch
 import os
+import einops
+import numpy as np
 import shutil
 
-print("✅ FramePackPipeline importé avec succès")
+from transformers import (
+    CLIPTextModel, CLIPTokenizer,
+    SiglipImageProcessor, SiglipVisionModel
+)
+from diffusers import AutoencoderKL
+from diffusers_helper.models.hunyuan_video_packed import HunyuanVideoTransformer3DModelPacked
+from diffusers_helper.hunyuan import encode_prompt_conds, vae_decode_fake
+from diffusers_helper.utils import generate_timestamp, resize_and_center_crop, save_bcthw_as_mp4
+from diffusers_helper.clip_vision import hf_clip_vision_encode
+from diffusers_helper.pipelines.k_diffusion_hunyuan import sample_hunyuan
 
 class Predictor(BasePredictor):
     def setup(self):
-        self.pipe = FramePackPipeline.from_pretrained(
-            "githubcto/framepack",
-            torch_dtype=torch.float16
-        )
-        self.pipe.to("cuda")
+        print("🔧 Chargement des modèles...")
+        self.text_encoder = CLIPTextModel.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="text_encoder", torch_dtype=torch.float16).to("cuda")
+        self.tokenizer = CLIPTokenizer.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="tokenizer")
+        self.vae = AutoencoderKL.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="vae", torch_dtype=torch.float16).to("cuda")
+        self.image_encoder = SiglipVisionModel.from_pretrained("lllyasviel/flux_redux_bfl", subfolder="image_encoder", torch_dtype=torch.float16).to("cuda")
+        self.processor = SiglipImageProcessor.from_pretrained("lllyasviel/flux_redux_bfl", subfolder="feature_extractor")
+        self.transformer = HunyuanVideoTransformer3DModelPacked.from_pretrained("lllyasviel/FramePackI2V_HY", torch_dtype=torch.bfloat16).to("cuda")
+        self.vae.eval()
+        self.text_encoder.eval()
+        self.image_encoder.eval()
+        self.transformer.eval()
 
     def predict(
         self,
-        image: Path = Input(description="Image d'entrée (.png ou .jpg)"),
-        prompt: str = Input(description="Texte décrivant le mouvement", default="The man dances powerfully, full of energy."),
-        frames: int = Input(description="Nombre de frames à générer", default=60),
-        fps: int = Input(description="Images par seconde", default=24),
+        image: Path = Input(description="Image (.png/.jpg)", default=None),
+        prompt: str = Input(description="Description du mouvement", default="The character moves confidently."),
+        seed: int = Input(description="Seed aléatoire", default=42),
+        steps: int = Input(description="Nombre d'étapes de sampling", default=25),
+        duration_seconds: float = Input(description="Durée de la vidéo en secondes", default=5.0),
+        fps: int = Input(description="Framerate de la vidéo", default=30),
     ) -> Path:
+        print("🚀 Génération en cours...")
+        torch.manual_seed(seed)
+
+        # Préparation image
         img = Image.open(image).convert("RGB")
-        video_frames = self.pipe(prompt=prompt, image=img, num_frames=frames).frames
+        np_img = np.array(img)
+        height, width = 512, 512
+        input_image_np = resize_and_center_crop(np_img, target_width=width, target_height=height)
+        input_image_pt = torch.from_numpy(input_image_np).float() / 127.5 - 1
+        input_image_pt = input_image_pt.permute(2, 0, 1)[None, :, None].to("cuda")
 
-        # Crée un dossier temporaire pour les frames
-        frame_dir = "frames"
-        os.makedirs(frame_dir, exist_ok=True)
+        # Encodage texte
+        prompt_embeds, _ = encode_prompt_conds(
+            prompt, self.text_encoder, self.text_encoder, self.tokenizer, self.tokenizer
+        )
 
-        for i, frame in enumerate(video_frames):
-            frame.save(f"{frame_dir}/{i:04d}.png")
+        # Encodage VAE
+        start_latent = self.vae.encode(input_image_pt).latent_dist.sample().to(dtype=self.vae.dtype)
 
-        out_path = "out.mp4"
-        os.system(f"ffmpeg -y -framerate {fps} -i {frame_dir}/%04d.png -c:v libx264 -pix_fmt yuv420p {out_path}")
+        # Encodage image CLIP
+        img_enc_out = hf_clip_vision_encode(input_image_np, self.processor, self.image_encoder)
+        clip_hidden = img_enc_out.last_hidden_state.to(dtype=torch.bfloat16)
 
-        # Nettoyage optionnel du dossier frames (facultatif si tu veux le garder)
-        shutil.rmtree(frame_dir)
+        # Sampling
+        latent_frames = sample_hunyuan(
+            transformer=self.transformer,
+            sampler='unipc',
+            width=width,
+            height=height,
+            frames=int(fps * duration_seconds),
+            real_guidance_scale=1.0,
+            distilled_guidance_scale=10.0,
+            guidance_rescale=0.0,
+            num_inference_steps=steps,
+            generator=torch.manual_seed(seed),
+            prompt_embeds=prompt_embeds,
+            prompt_embeds_mask=None,
+            prompt_poolers=None,
+            negative_prompt_embeds=None,
+            negative_prompt_embeds_mask=None,
+            negative_prompt_poolers=None,
+            device="cuda",
+            dtype=torch.bfloat16,
+            image_embeddings=clip_hidden,
+            latent_indices=None,
+            clean_latents=start_latent,
+            clean_latent_indices=None,
+            clean_latents_2x=None,
+            clean_latent_2x_indices=None,
+            clean_latents_4x=None,
+            clean_latent_4x_indices=None,
+        )
 
-        return Path(out_path)
+        # Decode + Save
+        pixel_frames = vae_decode_fake(latent_frames)
+        video_np = (pixel_frames * 255.0).detach().cpu().numpy().clip(0, 255).astype(np.uint8)
+        video_np = einops.rearrange(video_np, 'b c t h w -> t h w c')
+
+        out_file = f"/tmp/{generate_timestamp()}.mp4"
+        save_bcthw_as_mp4(video_np, out_file, fps=fps)
+
+        return Path(out_file)
