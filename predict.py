@@ -7,22 +7,24 @@ import numpy as np
 import shutil
 
 from transformers import (
-    CLIPTextModel, CLIPTokenizer,
-    SiglipImageProcessor, SiglipVisionModel
+    CLIPTextModel, AutoTokenizer,
+    SiglipImageProcessor, SiglipVisionModel,
+    LlamaModel, LlamaTokenizerFast
 )
 from diffusers import AutoencoderKL
 from diffusers_helper.models.hunyuan_video_packed import HunyuanVideoTransformer3DModelPacked
 from diffusers_helper.hunyuan import encode_prompt_conds, vae_decode_fake
-from diffusers_helper.utils import generate_timestamp, resize_and_center_crop, save_bcthw_as_mp4
+from diffusers_helper.utils import generate_timestamp, resize_and_center_crop, save_bcthw_as_mp4, crop_or_pad_yield_mask
 from diffusers_helper.clip_vision import hf_clip_vision_encode
 from diffusers_helper.pipelines.k_diffusion_hunyuan import sample_hunyuan
 
 class Predictor(BasePredictor):
     def setup(self):
         print("🔧 Chargement des modèles...")
-        self.text_encoder = CLIPTextModel.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="text_encoder", torch_dtype=torch.float16).to("cuda")
-        self.tokenizer = CLIPTokenizer.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="tokenizer")
-        self.vae = AutoencoderKL.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="vae", torch_dtype=torch.float16).to("cuda")
+        self.text_encoder = LlamaModel.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="text_encoder", torch_dtype=torch.float16).to("cuda")
+        self.text_encoder_2 = CLIPTextModel.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="text_encoder_2", torch_dtype=torch.float16).to("cuda")
+        self.tokenizer = LlamaTokenizerFast.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="tokenizer")
+        self.tokenizer_2 = AutoTokenizer.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder="tokenizer_2")
         self.image_encoder = SiglipVisionModel.from_pretrained("lllyasviel/flux_redux_bfl", subfolder="image_encoder", torch_dtype=torch.float16).to("cuda")
         self.processor = SiglipImageProcessor.from_pretrained("lllyasviel/flux_redux_bfl", subfolder="feature_extractor")
         self.transformer = HunyuanVideoTransformer3DModelPacked.from_pretrained("lllyasviel/FramePackI2V_HY", torch_dtype=torch.bfloat16).to("cuda")
@@ -51,10 +53,16 @@ class Predictor(BasePredictor):
         input_image_pt = torch.from_numpy(input_image_np).float() / 127.5 - 1
         input_image_pt = input_image_pt.permute(2, 0, 1)[None, :, None].to("cuda")
 
-        # Encodage texte
-        prompt_embeds, _ = encode_prompt_conds(
-            prompt, self.text_encoder, self.text_encoder, self.tokenizer, self.tokenizer
+        # Encodage texte avec LLaMA + CLIP
+        prompt_embeds, prompt_poolers = encode_prompt_conds(
+            prompt, self.text_encoder, self.text_encoder_2, self.tokenizer, self.tokenizer_2
         )
+
+        # Masques pour guidance
+        prompt_embeds, prompt_mask = crop_or_pad_yield_mask(prompt_embeds, length=512)
+        neg_prompt_embeds = torch.zeros_like(prompt_embeds)
+        neg_prompt_mask = torch.zeros_like(prompt_mask)
+        neg_prompt_poolers = torch.zeros_like(prompt_poolers)
 
         # Encodage VAE
         start_latent = self.vae.encode(input_image_pt).latent_dist.sample().to(dtype=self.vae.dtype)
@@ -76,11 +84,11 @@ class Predictor(BasePredictor):
             num_inference_steps=steps,
             generator=torch.manual_seed(seed),
             prompt_embeds=prompt_embeds,
-            prompt_embeds_mask=None,
-            prompt_poolers=None,
-            negative_prompt_embeds=None,
-            negative_prompt_embeds_mask=None,
-            negative_prompt_poolers=None,
+            prompt_embeds_mask=prompt_mask,
+            prompt_poolers=prompt_poolers,
+            negative_prompt_embeds=neg_prompt_embeds,
+            negative_prompt_embeds_mask=neg_prompt_mask,
+            negative_prompt_poolers=neg_prompt_poolers,
             device="cuda",
             dtype=torch.bfloat16,
             image_embeddings=clip_hidden,
