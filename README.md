@@ -1,6 +1,7 @@
 # 🎞️ FramePack Runner – Video Generation with Image + Prompt
 
 [![Run on Replicate](https://replicate.com/badge.svg)](https://replicate.com/paullux/framepack-runner)
+👉 [Try it on Replicate](https://replicate.com/paullux/framepack-runner)
 
 **FramePack** is a next-frame video generation architecture developed by researchers at Stanford.
 This repo provides a simple interface to use FramePack via [Replicate](https://replicate.com/paullux/framepack-runner), allowing you to generate short videos from a single image and a motion-focused prompt.
