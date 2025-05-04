@@ -4,7 +4,7 @@ diffusers==0.16.1
 einops==0.6.0
 safetensors==0.3.1
 opencv-python==4.8.0.74
-gradio==5.23.0
+gradio==3.41.2
 Pillow==9.5.0
 numpy==1.24.3
 accelerate==1.6.0
