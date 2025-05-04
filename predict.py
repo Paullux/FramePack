@@ -5,6 +5,8 @@ import torch
 import os
 import shutil
 
+print("✅ FramePackPipeline importé avec succès")
+
 class Predictor(BasePredictor):
     def setup(self):
         self.pipe = FramePackPipeline.from_pretrained(
