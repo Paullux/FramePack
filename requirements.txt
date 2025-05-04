@@ -1,8 +1,8 @@
 torch==2.0.1
-transformers==4.38.2
+transformers==4.30.2
 diffusers==0.16.1
 einops==0.6.0
-safetensors==0.4.3
+safetensors==0.3.1
 opencv-python==4.8.0.74
 gradio==5.23.0
 Pillow==9.5.0
