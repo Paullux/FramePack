@@ -11,7 +11,7 @@ from transformers import (
     SiglipImageProcessor, SiglipVisionModel,
     LlamaModel, LlamaTokenizerFast
 )
-from diffusers import AutoencoderKLHunyuanVideo
+from hunyuandit.models.autoencoder import AutoencoderKLHunyuanVideo
 from diffusers_helper.models.hunyuan_video_packed import HunyuanVideoTransformer3DModelPacked
 from diffusers_helper.hunyuan import encode_prompt_conds, vae_decode_fake
 from diffusers_helper.utils import generate_timestamp, resize_and_center_crop, save_bcthw_as_mp4, crop_or_pad_yield_mask
