@@ -13,7 +13,7 @@ build:
     - pip install --no-cache-dir ./flash_attn-2.3.6+cu118torch2.1cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
     - git clone https://github.com/TencentARC/HunyuanDiT.git /tmp/HunyuanDiT
     - pip install -e /tmp/HunyuanDiT
-    - pip install --no-cache-dir -r requirements.txt
+    - pip install --no-cache-dir -r /tmp/requirements.txt
 
 predict: predict.py:Predictor
 
