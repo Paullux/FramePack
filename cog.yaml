@@ -6,13 +6,15 @@ build:
     - build-essential
     - cmake
     - ninja-build
+    - unzip
   python_requirements: requirements.txt
   run:
     - pip install --no-cache-dir torch==2.1.2+cu118 torchvision==0.16.2+cu118 torchaudio==2.1.2+cu118 --index-url https://download.pytorch.org/whl/cu118
     - wget "https://github.com/Dao-AILab/flash-attention/releases/download/v2.3.6/flash_attn-2.3.6+cu118torch2.1cxx11abiFALSE-cp310-cp310-linux_x86_64.whl"
     - pip install --no-cache-dir ./flash_attn-2.3.6+cu118torch2.1cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
-    - git clone https://github.com/TencentARC/HunyuanDiT.git /tmp/HunyuanDiT
-    - pip install -e /tmp/HunyuanDiT
+    - git clone https://github.com/Tencent/HunyuanDiT /tmp/HunyuanDiT.zip
+    - unzip /tmp/HunyuanDiT.zip -d /tmp/
+    - pip install -e /tmp/HunyuanDiT-1.0
     - pip install --no-cache-dir -r /tmp/requirements.txt
 
 predict: predict.py:Predictor
