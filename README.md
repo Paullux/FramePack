@@ -15,9 +15,11 @@ Run the model on [Replicate](https://replicate.com/paullux/framepack-runner) dir
 ```bash
 replicate run paullux/framepack-runner \
   -v image=@input.png \
-  -v prompt="The man dances powerfully, full of energy." \
-  -v frames=60 \
-  -v fps=24
+  -v prompt="A cat jumps backward in surprise" \
+  -v seed=123 \
+  -v steps=30 \
+  -v duration_seconds=5 \
+  -v fps=30
 ```
 
 ---
@@ -38,13 +40,14 @@ FramePack compresses temporal context into fixed-length representations, making 
 
 ## 📦 Inputs
 
-| Name   | Type   | Description                             |
-|--------|--------|-----------------------------------------|
-| `image`  | `file`   | The input image (.png or .jpg)          |
-| `prompt` | `string` | A motion-focused description prompt     |
-| `frames` | `integer` | Number of frames to generate (default: `60`) |
-| `fps`    | `integer` | Output video frame rate (default: `24`)  |
-
+| Name               | Type      | Description                                     |
+|--------------------|-----------|-------------------------------------------------|
+| `image`            | `file`    | The input image (`.png` or `.jpg`)              |
+| `prompt`           | `string`  | A motion-focused description prompt             |
+| `seed`             | `integer` | Random seed for reproducibility (default: `42`) |
+| `steps`            | `integer` | Sampling steps (default: `25`)                  |
+| `duration_seconds` | `number`  | Duration of the video in seconds (default: `5`) |
+| `fps`              | `integer` | Output video frame rate (default: `30`)         |
 
 ---
 
@@ -57,14 +60,14 @@ Returns an `.mp4` video file composed of all generated frames.
 
 ## 🛠 How it works
 
-```bash
-python framepack_runner.py \
-  --input input.png \
-  --prompt "The man runs in slow motion through heavy rain" \
-  --frames 60 \
-  --fps 24
-```
-All frames are saved locally and then compiled into a video using `ffmpeg`.
+Internally, FramePack uses:
+
+- Text encoding (`LLaMA`, `CLIP`)
+- Vision encoding (`SigLIP`)
+- VAE for latent transformation
+- Transformer for temporal prediction
+
+The video is generated via next-frame sampling, decoded, and saved as an `.mp4`.
 
 ## 📸 Example Prompt Ideas
 

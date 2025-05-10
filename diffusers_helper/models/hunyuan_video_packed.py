@@ -16,7 +16,7 @@ from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers_helper.dit_common import LayerNorm
 from diffusers_helper.utils import zero_module
-
+from .autoencoder_kl_hunyuan_video import AutoencoderKLHunyuanVideo
 
 enabled_backends = []
 
@@ -26,7 +26,7 @@ if torch.backends.cuda.math_sdp_enabled():
     enabled_backends.append("math")
 if torch.backends.cuda.mem_efficient_sdp_enabled():
     enabled_backends.append("mem_efficient")
-if torch.backends.cuda.cudnn_sdp_enabled():
+if hasattr(torch.backends.cuda, "cudnn_sdp_enabled") and torch.backends.cuda.cudnn_sdp_enabled():
     enabled_backends.append("cudnn")
 
 print("Currently enabled native sdp backends:", enabled_backends)
@@ -933,7 +933,7 @@ class HunyuanVideoTransformer3DModelPacked(ModelMixin, ConfigMixin, PeftAdapterM
         if batch_size == 1:
             # When batch size is 1, we do not need any masks or var-len funcs since cropping is mathematically same to what we want
             # If they are not same, then their impls are wrong. Ours are always the correct one.
-            text_len = encoder_attention_mask.sum().item()
+            text_len = int(encoder_attention_mask.sum().item())
             encoder_hidden_states = encoder_hidden_states[:, :text_len]
             attention_mask = None, None, None, None
         else:
