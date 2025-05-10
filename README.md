@@ -58,6 +58,15 @@ Returns an `.mp4` video file composed of all generated frames.
 
 ---
 
+## ⚠️ Cold Start Warning
+
+When the model container is cold (first use), the setup phase may exceed 10 minutes, causing a temporary failure.
+Replicate will automatically retry with a warm container, and the generation will succeed in ~30 seconds.
+
+✅ You can safely retry the prediction if the first attempt fails due to setup timeout.
+
+---
+
 ## 🛠 How it works
 
 Internally, FramePack uses:
